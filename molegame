@@ -1,0 +1,181 @@
+#!/usr/bin/perl
+use strict;
+
+# side scrolling mole game
+# ROR, GP, DR
+
+use SDL; #needed to get all constants
+use SDL::Video;
+use SDLx::App;
+use SDL::Surface;
+use SDL::Rect;
+use SDL::Image;
+use SDL::Event;
+use SDL::Mouse;
+
+my ($application, $background, $event, $filename, $goodguy, $goodguy_rect, $ggX, $ggY,$rectVisible,$bkgrndX,$bkgrndY);
+my ($ggY_min, $ggY_max, $badguy_step) = (0, 550, 3);
+my $ggX_min=50;
+my $ggX_max=1100;
+my ($bgX, $bgY, $badguy_rect, $badguy);
+my ($new_badguy_rect, $rectCover, $old_bgX);
+my ($badguymaster, $goodguymaster);
+my ($badguy_x,$goodguy_x,$badguy_y,$goodguy_y,$app);
+use constant screenWidth => 1200;
+use constant screenHeight => 400;
+
+# First create a new App
+$application = SDLx::App->new(
+    title  => "Mole Game",
+    width  => screenWidth, 
+    height => screenHeight, 
+    depth  => 20, 
+    exit_on_quit => 1 # Enable 'X' button
+);
+
+# Set up the background image + rectangle
+$filename = "moleBackground.png";
+$background = SDL::Image::load($filename);
+my $screenMaxWidth=$background->w;
+my $screenMaxHeight=$background->h;
+my $cover = $background;
+my $rectBackground = SDL::Rect->new(0,0,screenWidth,screenHeight);
+my $granularity=4;
+# load and prepare the badguy
+$filename = "badguy1.png";
+$badguy = SDL::Image::load($filename);
+# first set a master copy for later copying
+$badguymaster = SDL::Rect->new(0, 0, $badguy->w, $badguy->h);
+$bgX = 100;
+$bgY = 80;
+# now set up the start for the b-g
+$badguy_rect = SDL::Rect->new($bgX,$bgY,$badguy->w,$badguy->h);
+
+# prepare the good guy
+$filename = "mole.png";
+$goodguy = SDL::Image::load($filename);
+# make master recatngle for later copying
+$goodguymaster = SDL::Rect->new(0, 0,$goodguy->w,$goodguy->h);
+# now do the actual start for the g-g
+$ggX = int(screenWidth/18);
+$ggY = 280;
+$goodguy_rect = SDL::Rect->new($ggX,$ggY,$goodguy->w,$goodguy->h,);
+my $bkgrndX=0;
+my $bkgrndY=0;
+my $rectVisible=SDL::Rect->new($bkgrndX,$bkgrndY,screenWidth,screenHeight);
+SDL::Video::blit_surface($background, $rectVisible, $application, $rectBackground );
+SDL::Video::blit_surface ($goodguy, $goodguymaster, $application, $goodguy_rect);
+SDL::Video::blit_surface ($badguy, $badguymaster, $application, $badguy_rect);
+SDL::Video::update_rects($application, $goodguy_rect, $badguy_rect, $rectBackground);
+
+# set key repeat on after 100ms, then every 0ms
+SDL::Events::enable_key_repeat(100, 1);
+
+# register the handlers
+$application->add_show_handler( \&showBackground);
+$application->add_event_handler( \&quit_event);
+$application->add_event_handler( \&key_event);
+$application->add_move_handler( \&move_badguy);
+$application->add_show_handler( \&show_badguy);
+$application->add_show_handler( \&showGoodGuy);
+$application->add_show_handler( sub { $application->sync(); } );
+# Start the game loop
+$application->run;
+
+sub move_badguy {
+  # Calculate where the bad guy should be
+  my ($step, $app, $t) = @_;
+  
+  $old_bgX = $bgX;
+  $bgX+=$badguy_step;
+  if ($bgX > 600) {
+    $bgX = 600;
+    $badguy_step *= -1
+  }
+  elsif ($bgX < 50) {
+    $bgX = 50;
+    $badguy_step *= -1  
+  }
+}
+use constant some_arbitrary_value => 100;
+  my ($step, $t) = @_;
+  # formula for distance between  two points is:
+  # square root of (square(X2 - X1) + square(Y2 - Y1))
+  # Using Good guy as point #1, bad guy as point #2
+  my $distance = sqrt (($badguy_x - $goodguy_x)**2 + ($badguy_y - $goodguy_y)**2);
+  # I don't mind the decimals for now
+  $distance=int($distance);
+  print "[$distance]\n";
+#   if ($distance < some_arbitrary_value) {
+#     print "Bang. You're dead.\n";
+#     $app->stop;
+#   }
+sub showBackground {
+  my ($delta, $app) = @_;
+  $rectVisible=SDL::Rect->new($bkgrndX, $bkgrndY, screenWidth, screenHeight);
+  SDL::Video::blit_surface($background, $rectVisible, $application, $rectBackground);
+}
+sub show_badguy {
+  # Draw the bad guy
+  my ($delta, $app) = @_;
+  $new_badguy_rect = SDL::Rect->new($bgX,$bgY,$badguy->w,$badguy->h);  
+  SDL::Video::blit_surface ($badguy, $badguymaster, $app, $new_badguy_rect);
+  SDL::Video::update_rects($app, $new_badguy_rect);
+}
+sub showGoodGuy {
+  # Draw the bad guy
+  my ($delta, $app) = @_;
+  my ($old_ggX, $old_ggY, $rectGoingTo, $rectCover);
+  $rectGoingTo = SDL::Rect->new($ggX,$ggY,$goodguy->w,$goodguy->h);
+  SDL::Video::blit_surface ($goodguy, $goodguymaster, $app, $rectGoingTo);
+  SDL::Video::update_rects($app, $rectGoingTo);
+}
+
+sub quit_event {
+  my ($event, $app) = @_;
+  if($event->type == SDL_QUIT) {
+    $app->stop;
+  }
+}
+
+sub key_event {
+  my ($event, $app) = @_;
+  my $key_name = SDL::Events::get_key_name( $event->key_sym );  
+  if (($key_name eq "x") || ($key_name eq "X") ) {
+    $app->stop;
+  }
+  elsif ($key_name eq "up") {
+    $bkgrndY-=$granularity;
+    if ($bkgrndY < 0) {
+      $bkgrndY = 0;
+    }
+  }
+  elsif ($key_name eq "down") {
+    $bkgrndY+=$granularity;
+    if ($bkgrndY >= $screenMaxHeight) {
+      # reverse the last
+      $bkgrndY -= $granularity;
+    }
+  }
+  elsif ($key_name eq "left") {
+    if ($ggX > $ggX_min) {
+      $ggX--;
+    }
+    $bkgrndX-=$granularity;
+    if ($bkgrndX < 0) {
+      $bkgrndX = 0;
+    }
+  }
+  elsif ($key_name eq "right") {
+    if ($ggX < $ggX_max) {
+      $ggX++;
+    }
+    if (($bkgrndX ) < ($background->w -screenWidth)) {
+      $bkgrndX+=$granularity;
+      if ($bkgrndX >= $screenMaxWidth) {
+	# reverse the last
+	$bkgrndX -= $granularity;
+      }
+    }
+  }
+}
